@@ -4,11 +4,15 @@ import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.os.Build;
 import android.preference.PreferenceManager;
+import android.support.v4.view.GravityCompat;
+import android.support.v4.widget.DrawerLayout;
+import android.support.v4.widget.SwipeRefreshLayout;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -42,6 +46,9 @@ public class WeatherActivity extends AppCompatActivity {
     private TextView tvSport;
     private ImageView ivBingPic;
     private SharedPreferences prefs;
+    public SwipeRefreshLayout swipeRefresh;
+    public DrawerLayout drawerLayout;
+    private Button btnNav;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -80,16 +87,25 @@ public class WeatherActivity extends AppCompatActivity {
         tvSport = (TextView) findViewById(R.id.tv_sport);
 
         ivBingPic = (ImageView) findViewById(R.id.iv_bing_pic);
+        swipeRefresh = (SwipeRefreshLayout) findViewById(R.id.swipe_refresh);
+        swipeRefresh.setColorSchemeResources(R.color.colorPrimary);
+
+        btnNav = (Button) findViewById(R.id.btn_nav);
+        drawerLayout = (DrawerLayout) findViewById(R.id.drawer_layout);
+
+        btnNav.setOnClickListener(v -> drawerLayout.openDrawer(GravityCompat.START));
 
         prefs = PreferenceManager.getDefaultSharedPreferences(this);
         String weatherString = prefs.getString("weather",null);
+        String weatherId;
         //有缓存，直接解析天气数据
         if(!TextUtils.isEmpty(weatherString)){
             Weather weather = Utility.handleWeatherResponse(weatherString);
+            weatherId = weather.basic.weatherId;
             showWeatherInfo(weather);
         }else{
             //无缓存从网络上获取
-            String weatherId = getIntent().getStringExtra("weather_id");
+            weatherId = getIntent().getStringExtra("weather_id");
             //注意，请求数据的时候先将 ScrollView 隐藏掉，否则空数据的界面看上去很奇怪
             scrollWeather.setVisibility(View.INVISIBLE);
             requestWeather(weatherId);
@@ -102,6 +118,8 @@ public class WeatherActivity extends AppCompatActivity {
         }else{
             loadBingPic();
         }
+
+        swipeRefresh.setOnRefreshListener(() -> requestWeather(weatherId));
     }
 
     /**
@@ -128,7 +146,7 @@ public class WeatherActivity extends AppCompatActivity {
     /**
      * 根据天气id从服务器上获取对应的天气信息
      */
-    private void requestWeather(String weatherId) {
+    public void requestWeather(String weatherId) {
         String weatherUrl = "http://guolin.tech/api/weather?cityid=" + weatherId + "&key=bc0418b57b2d4918819d3974ac1285d9";
         HttpUtil.sendOkHttpRequest(weatherUrl, new Callback() {
             @Override
@@ -144,12 +162,16 @@ public class WeatherActivity extends AppCompatActivity {
                     }else{
                         Toast.makeText(WeatherActivity.this, "获取天气信息失败", Toast.LENGTH_SHORT).show();
                     }
+                    swipeRefresh.setRefreshing(false);
                 });
             }
 
             @Override
             public void onFailure(Call call, IOException e) {
-                runOnUiThread(() -> Toast.makeText(WeatherActivity.this, "获取天气信息失败", Toast.LENGTH_SHORT).show());
+                runOnUiThread(() -> {
+                    Toast.makeText(WeatherActivity.this, "获取天气信息失败", Toast.LENGTH_SHORT).show();
+                    swipeRefresh.setRefreshing(false);
+                });
             }
         });
         /*
